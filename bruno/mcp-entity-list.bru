@@ -1,0 +1,31 @@
+meta {
+  name: 06 MCP entity list (confirm name via tools/list first)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{ASIND}}/api/mcp
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "Coupon.list",
+      "arguments": { "limit": 50 }
+    }
+  }
+}

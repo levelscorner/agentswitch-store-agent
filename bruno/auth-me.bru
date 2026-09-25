@@ -1,0 +1,14 @@
+meta {
+  name: 02 Who am I (seat, roles, allowed_apps)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{ASIND}}/api/auth/me
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

@@ -1,0 +1,27 @@
+meta {
+  name: 09 File a bug (POST /api/bug-report)
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{ASIND}}/api/bug-report
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "description": "REPLACE: what you did, what you expected, what happened instead — with reproducing steps. Seat: Storefront (team08).",
+    "page": "Storefront",
+    "agent_seat": "Storefront"
+  }
+}

@@ -1,0 +1,28 @@
+meta {
+  name: 03 MCP tools/list (our seat's real tools + entity names)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{ASIND}}/api/mcp
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }
+}

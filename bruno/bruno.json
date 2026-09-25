@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "AgentSwitch Team08 Storefront",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

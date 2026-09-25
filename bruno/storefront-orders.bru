@@ -1,0 +1,14 @@
+meta {
+  name: 04 Storefront orders (module endpoint)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{ASIND}}/api/storefront/account/orders
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

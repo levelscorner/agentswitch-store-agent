@@ -1,0 +1,14 @@
+meta {
+  name: 05 Storefront products (catalogue)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{ASIND}}/api/storefront/products
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
