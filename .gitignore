@@ -24,6 +24,9 @@ probe*.py
 PLAN.md
 docs/PLAN.md
 *.local.md
+# Our bug/enhancement drafts — we file these via the bug button/API; keep the drafts local
+docs/bug-reports/
+docs/enhancements/
 
 # macOS
 .DS_Store
