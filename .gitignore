@@ -16,6 +16,15 @@ harness/runs/
 agent/mem_store/
 *.log
 
+# Internal working aids — keep LOCAL, never submit (bug-hunt logs, probes, roadmap notes)
+notes/
+research/
+scratch/
+probe*.py
+PLAN.md
+docs/PLAN.md
+*.local.md
+
 # macOS
 .DS_Store
 
