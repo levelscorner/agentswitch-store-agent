@@ -1,49 +1,75 @@
-"""Store Agent goal runners (team08 · Storefront).
+"""Store Agent goal runners (team08 · Storefront). Wired live 2026-09-25.
 
-Two goals from the seat brief:
-  - coupon_ledger : how did the launch coupon do — does its usage tie to the ledger?
-  - payment_stock : where do the payment records and the stock records disagree?
+  - coupon_ledger : does the launch coupon's used_count tie to the orders that used it?
+  - payment_stock : which orders shipped (stock moved) while still unpaid — the real
+                    disagreement, excluding cash-on-delivery where that is legitimate.
 
-STATUS: the reconciliation SHAPE is here; the field arithmetic is wired after the
-first login confirms entity/field names. Each runner PROBES its entities live and
-stores a sample row's keys into state, so finishing the wiring is a one-edit step.
+Grading reads the DB (agent/verify.py recomputes independently); these produce the answer.
 """
 from agent import config
 from agent.client import MCPError
 
+# Prepaid methods: for these, a tracking number on an unpaid order is a genuine
+# payment/stock disagreement. COD legitimately ships before payment, so it is excluded.
+PREPAID = {"razorpay", "card", "ach", "check", "bank_transfer"}
+_PAID_STATES = ("paid", "processing", "shipped", "delivered", "confirmed")
+_SHIPPED_STATES = ("shipped", "delivered")
+
 
 def _rows(client, entity, args=None):
-    r = client.call(f"{entity}.list", args or {"limit": 200})
+    r = client.call(f"{entity}.list", args or {"limit": 500})
     if isinstance(r, list):
         return r
     return r.get("items", r.get("data", r.get("results", []))) if isinstance(r, dict) else []
 
 
-def _probe(client, entity):
-    """List an entity; return {'count', 'keys'} or {'error'} — never raises."""
-    try:
-        rows = _rows(client, entity)
-        keys = sorted(rows[0].keys()) if rows and isinstance(rows[0], dict) else []
-        return {"count": len(rows), "keys": keys}
-    except MCPError as e:
-        return {"error": str(e)}
+def is_paid(o):
+    return bool(o.get("funding_amount")) or o.get("status") in _PAID_STATES
+
+
+def is_shipped(o):
+    return bool(o.get("tracking_number")) or o.get("status") in _SHIPPED_STATES
 
 
 def run_coupon_ledger(client, state):
-    """Goal: how did the launch coupon do — does usage tie to the ledger?"""
-    state["coupon_discovery"] = {e: _probe(client, e)
-                                 for e in (config.COUPON, config.COUPON_LEDGER, config.ORDER)}
-    # TODO(after login): find the launch coupon, count its redemptions on ORDER, sum the
-    # COUPON_LEDGER entries for it, set state["coupon_ties"] = (redeemed == ledger_total).
-    state.setdefault("_pending", []).append("coupon_ledger: confirm names, then reconcile usage vs ledger")
+    """Goal 1: how did the launch coupon do — does used_count tie to real orders?"""
+    coupons = _rows(client, config.COUPON)
+    orders = _rows(client, config.ORDER)
+    used_by_code = {}
+    for o in orders:
+        code = o.get("coupon_code")
+        if code:
+            used_by_code[code] = used_by_code.get(code, 0) + 1
+
+    launch = next((cp for cp in coupons if cp.get("code") == config.LAUNCH_COUPON_CODE), None)
+    if launch:
+        orders_using = used_by_code.get(launch.get("code"), 0)
+        state["launch_coupon"] = {
+            "code": launch.get("code"),
+            "used_count": launch.get("used_count"),
+            "usage_limit": launch.get("usage_limit"),
+            "orders_using": orders_using,
+            "ties": (launch.get("used_count") or 0) == orders_using,
+        }
+        state["coupon_ties"] = state["launch_coupon"]["ties"]
+
+    # catalogue-wide integrity signals (feed the bug hunt)
+    state["coupon_ledger_untied"] = sum(
+        1 for cp in coupons if (cp.get("used_count") or 0) != used_by_code.get(cp.get("code"), 0))
+    state["coupons_over_limit"] = [
+        cp.get("code") for cp in coupons
+        if (cp.get("usage_limit") or 0) > 0 and (cp.get("used_count") or 0) > cp.get("usage_limit")]
     return state
 
 
 def run_payment_stock(client, state):
-    """Goal: where do payment and stock disagree?"""
-    state["payment_stock_discovery"] = {e: _probe(client, e)
-                                        for e in (config.PAYMENT, config.STOCK, config.ORDER)}
-    # TODO(after login): join PAYMENT and STOCK by order/product, collect rows where
-    # paid-but-not-decremented (or decremented-but-unpaid), set state["disagreements"].
-    state.setdefault("_pending", []).append("payment_stock: confirm names, then diff payment vs stock")
+    """Goal 2: prepaid orders that shipped (stock moved) while still unpaid."""
+    orders = _rows(client, config.ORDER)
+    dis = [
+        {"number": o.get("number"), "payment_method": o.get("payment_method"),
+         "status": o.get("status"), "tracking_number": o.get("tracking_number")}
+        for o in orders
+        if is_shipped(o) and not is_paid(o) and o.get("payment_method") in PREPAID
+    ]
+    state["disagreements"] = dis
     return state

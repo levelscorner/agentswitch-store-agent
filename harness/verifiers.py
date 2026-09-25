@@ -1,8 +1,7 @@
 """DB-reading verifiers for the Store Agent seat. Truth is the DB, not the reply.
-
-The two goal verifiers report 'pending' until the analyst runners are wired against
-the real entity/field names (post-login) — a pending goal fails, never falsely passes.
+Both goal checks recompute from the database via agent/verify.py and compare.
 """
+from agent import verify
 
 
 def seat_has_storefront_access(client):
@@ -12,14 +11,14 @@ def seat_has_storefront_access(client):
 
 
 def coupon_ledger_ties(client, state):
-    ties = state.get("coupon_ties")
-    if ties is None:
-        return False, "pending schema wiring (agent/analyst.run_coupon_ledger TODO)"
-    return bool(ties), f"coupon_ties={ties}"
+    want = verify.db_launch_tie(client)
+    got = state.get("coupon_ties")
+    ok = want is not None and got == want
+    return ok, f"launch coupon tie: agent={got} db={want}"
 
 
 def payment_stock_agree(client, state):
-    dis = state.get("disagreements")
-    if dis is None:
-        return False, "pending schema wiring (agent/analyst.run_payment_stock TODO)"
-    return True, f"{len(dis)} disagreement(s) found"
+    want = verify.db_disagreements(client)
+    got = {d["number"] for d in (state.get("disagreements") or [])}
+    ok = bool(got) and got == want
+    return ok, f"prepaid shipped-unpaid: agent={len(got)} db={len(want)} match={ok}"

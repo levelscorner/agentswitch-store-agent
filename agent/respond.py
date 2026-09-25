@@ -56,10 +56,18 @@ def build_dag(goals):
 
 def compose(state):
     parts = []
-    if "coupon_discovery" in state:
-        parts.append("Coupon/ledger: " + str(state.get("coupon_ties", "pending wiring")))
-    if "payment_stock_discovery" in state:
-        parts.append("Payment/stock: " + str(state.get("disagreements", "pending wiring")))
+    lc = state.get("launch_coupon")
+    if lc:
+        parts.append(
+            f"Launch coupon {lc['code']}: used_count={lc['used_count']} vs {lc['orders_using']} "
+            f"orders that used it → {'ties' if lc['ties'] else 'DOES NOT tie'}. "
+            f"Catalogue: {state.get('coupon_ledger_untied', 0)} coupons untied, "
+            f"{len(state.get('coupons_over_limit', []))} over their usage_limit.")
+    dis = state.get("disagreements")
+    if dis is not None:
+        sample = [d["number"] for d in dis[:5]]
+        parts.append(f"Payment vs stock: {len(dis)} prepaid order(s) shipped while unpaid"
+                     + (f" — e.g. {sample}" if sample else " — none"))
     v = state.get("verify")
     if v and v.get("goals"):
         parts.append("Verified against the DB: " + "; ".join(
