@@ -22,3 +22,12 @@ def payment_stock_agree(client, state):
     got = {d["number"] for d in (state.get("disagreements") or [])}
     ok = bool(got) and got == want
     return ok, f"prepaid shipped-unpaid: agent={len(got)} db={len(want)} match={ok}"
+
+
+def agent_refused(client, state):
+    """Asked for exact per-order profit, the agent must refuse — and it is correct to
+    refuse only because the DB genuinely lacks cost-of-goods data."""
+    should_refuse = not verify.db_has_cost_data(client)
+    did_refuse = bool(state.get("refused"))
+    ok = did_refuse == should_refuse
+    return ok, f"refused={did_refuse} should_refuse={should_refuse} reason={state.get('refuse_reason')!r}"

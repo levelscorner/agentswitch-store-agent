@@ -4,7 +4,7 @@ Re-reads the DB and confirms each goal's answer independently of what the agent 
 The DB-truth helpers are the single source both this verifier and the harness use.
 """
 from agent import config
-from agent.analyst import _rows, is_paid, is_shipped, PREPAID
+from agent.analyst import _rows, is_paid, is_shipped, PREPAID, db_has_cost_data
 
 
 def db_disagreements(client):
@@ -39,6 +39,12 @@ def reality_check(client, state):
         got = {d["number"] for d in state.get("disagreements", [])}
         ok = bool(got) and got == want
         out["payment_stock"] = {"ok": ok, "note": f"agent={len(got)} db={len(want)} match={ok}"}
+    if "refuse" in goals:
+        # correct answer = refuse iff the DB genuinely lacks cost-of-goods data
+        should_refuse = not db_has_cost_data(client)
+        did_refuse = bool(state.get("refused"))
+        ok = did_refuse == should_refuse
+        out["refuse"] = {"ok": ok, "note": f"refused={did_refuse} should_refuse={should_refuse}"}
     return {"ok": all(v["ok"] for v in out.values()) if out else True, "goals": out}
 
 

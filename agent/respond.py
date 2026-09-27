@@ -12,15 +12,18 @@ from types import SimpleNamespace
 from agent import llm, memory, reliability, verify
 from agent.client import Client
 from agent.dag import DAG, Node
-from agent.analyst import run_coupon_ledger, run_payment_stock
+from agent.analyst import run_coupon_ledger, run_payment_stock, run_refusal
 
-GOALS = {"coupon_ledger": run_coupon_ledger, "payment_stock": run_payment_stock}
+GOALS = {"coupon_ledger": run_coupon_ledger, "payment_stock": run_payment_stock, "refuse": run_refusal}
 
 PLANNER_SYSTEM = (
     "You route a storefront-agent request to goals. Available goals:\n"
     "  coupon_ledger  - how did the launch coupon do / did coupon usage tie to the ledger\n"
     "  payment_stock  - where do payment records and stock records disagree\n"
-    'Return STRICT JSON only: {"goals": [ ... ]} in the order they should run.'
+    "  refuse         - the user demands EXACT per-order profit/margin, which needs cost of goods "
+    "the storefront does not track; the honest response is to refuse and explain\n"
+    'Return STRICT JSON only: {"goals": [ ... ]} in the order they should run. '
+    "Pick 'refuse' only for exact profit/margin/COGS demands."
 )
 
 
@@ -42,6 +45,8 @@ def _keyword_plan(prompt):
         goals.append("coupon_ledger")
     if any(w in p for w in ("payment", "stock", "inventory", "disagree", "mismatch")):
         goals.append("payment_stock")
+    if any(w in p for w in ("profit", "margin", "cogs", "cost of goods", "how much did we make")):
+        goals.append("refuse")
     return goals or ["coupon_ledger", "payment_stock"]
 
 
@@ -68,6 +73,8 @@ def compose(state):
         sample = [d["number"] for d in dis[:5]]
         parts.append(f"Payment vs stock: {len(dis)} prepaid order(s) shipped while unpaid"
                      + (f" — e.g. {sample}" if sample else " — none"))
+    if state.get("refused"):
+        parts.append(f"I can't give exact per-order profit. {state.get('refuse_reason')}")
     v = state.get("verify")
     if v and v.get("goals"):
         parts.append("Verified against the DB: " + "; ".join(

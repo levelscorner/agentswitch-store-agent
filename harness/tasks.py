@@ -2,7 +2,7 @@
 the two goal tasks go green once the runners are wired against real schemas.
 """
 from . import verifiers as V
-from agent.analyst import run_coupon_ledger, run_payment_stock
+from agent.analyst import run_coupon_ledger, run_payment_stock, run_refusal
 
 
 TASKS = [
@@ -23,5 +23,11 @@ TASKS = [
         "desc": "payment/stock disagreements identified (Goal #2)",
         "run": run_payment_stock,
         "verify": lambda c, s: V.payment_stock_agree(c, s),
+    },
+    {
+        "id": "refusal_exact_profit",
+        "desc": "asked for exact per-order profit, the agent refuses (no COGS data)",
+        "run": run_refusal,
+        "verify": lambda c, s: V.agent_refused(c, s),
     },
 ]
