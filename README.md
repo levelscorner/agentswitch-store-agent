@@ -24,24 +24,40 @@ One page. Step 2 (the skipped one): find the best real product in this domain, t
 write the gap between it and this seat. Worked example in the brief: Ledger vs **Rillet**
 (ships an MCP server over its own ledger). Draft: `docs/gap-report.md`.
 
-## Architecture (shared with the Website seat)
+## Architecture — a small hierarchy (shared with the Website seat)
 
-Domain-agnostic backbone, copied verbatim:
-- `agent/client.py` — MCP client (login → Bearer → tools/call; errors ride inside HTTP 200).
-- `agent/llm.py` — Anthropic call + model routing (Haiku/Opus). `agent/reliability.py` — retries, JSON repair, budget/circuit breaker.
-- `agent/dag.py` — parallel goal nodes on a shared blackboard (S08). `agent/memory.py` — 3-tier memory on `AgentMemory` (S07).
-- `agent/verify.py` — reality-check verifier (S17). `harness/` — scored task runner + `adapter.py` integration seam.
+A **supervisor** routes the planned goals to a roster; each graded goal is a **sub-agent**
+(a subgraph) that gets only a scoped slice of state, runs its own internal DAG, and returns
+only its declared outputs — its scratch never leaks back. Hand-rolled on our own DAG.
+
+```
+respond()
+  → plan (LLM → goals)
+  → Supervisor routes the roster (independents run in parallel):
+       coupon_ledger  (subgraph)  fetch coupons ‖ orders → reconcile → assemble
+       payment_stock  (subgraph)  fetch orders → detect → assemble
+       refuse         (function)  refuse exact per-order profit (no cost-of-goods data)
+  → verify (re-read the DB — truth, not the agent's words)
+  → compose
+```
+
+Domain-agnostic backbone (identical to the Website seat):
+- `agent/supervisor.py` — routes goals to workers, then verify. `agent/subgraph.py` — the sub-agent primitive.
+- `agent/state.py` — typed blackboard: channels + reducers + `scope()`/`absorb()`.
+- `agent/dag.py` — the engine (topological run, parallel independents, per-node timing trace). `agent/memory.py` — 3-tier memory (S07).
+- `agent/llm.py` — model routing. `agent/reliability.py` — retries, JSON repair, budget/circuit breaker (S12). `agent/verify.py` — reality-check verifier (S17).
 
 Storefront-specific:
-- `agent/config.py` — seat + entity names (**confirm against `tools/list` on first login**).
-- `agent/analyst.py` — the two goal runners (probe live, then reconcile).
-- `agent/respond.py` — planner + DAG wiring for the two goals.
+- `agent/config.py` — seat + entity names (`Coupon`, `WebOrder`, launch coupon).
+- `agent/subgraphs.py` — the `coupon_ledger` and `payment_stock` sub-agents.
+- `agent/analyst.py` — goal wrappers (route through the subgraphs) + the refusal.
+- `harness/` — scored task runner · `adapter.py` seam · `daily_hunt.py` (read-only probe-and-draft).
 
 ## Status
 
-- [x] Backbone in place; harness structure mirrors the Website seat.
-- [ ] **Login once** to confirm real entity/field names, then wire the two runners (marked `TODO(after login)`).
-- [ ] Week-1 gap report.
+- [x] Agent live — both goals + refusal, harness **4/4**, verified against the DB.
+- [x] Hierarchy: supervisor + subgraph sub-agents + typed state/reducers + observability trace.
+- [x] Gap report (vs Shopify) + bugs/enhancements filed; daily probe-and-draft hunt in place.
 
 ## Run
 
