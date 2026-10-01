@@ -32,47 +32,16 @@ def is_shipped(o):
 
 
 def run_coupon_ledger(client, state):
-    """Goal 1: how did the launch coupon do — does used_count tie to real orders?"""
-    coupons = _rows(client, config.COUPON)
-    orders = _rows(client, config.ORDER)
-    used_by_code = {}
-    for o in orders:
-        code = o.get("coupon_code")
-        if code:
-            used_by_code[code] = used_by_code.get(code, 0) + 1
-
-    launch = next((cp for cp in coupons if cp.get("code") == config.LAUNCH_COUPON_CODE), None)
-    if launch:
-        orders_using = used_by_code.get(launch.get("code"), 0)
-        state["launch_coupon"] = {
-            "code": launch.get("code"),
-            "used_count": launch.get("used_count"),
-            "usage_limit": launch.get("usage_limit"),
-            "orders_using": orders_using,
-            "ties": (launch.get("used_count") or 0) == orders_using,
-        }
-        state["coupon_ties"] = state["launch_coupon"]["ties"]
-
-    # catalogue-wide integrity signals (feed the bug hunt)
-    state["coupon_ledger_untied"] = sum(
-        1 for cp in coupons if (cp.get("used_count") or 0) != used_by_code.get(cp.get("code"), 0))
-    state["coupons_over_limit"] = [
-        cp.get("code") for cp in coupons
-        if (cp.get("usage_limit") or 0) > 0 and (cp.get("used_count") or 0) > cp.get("usage_limit")]
-    return state
+    """Goal 1 now runs as a sub-agent. Compatibility entry point (the harness and any legacy
+    caller use it): hand the coupon_ledger subgraph a scoped input, copy its outputs back."""
+    from agent.subgraphs import coupon_ledger_subgraph   # local import avoids an import cycle
+    state.update(coupon_ledger_subgraph.run(client, {"launch_coupon_code": config.LAUNCH_COUPON_CODE}))
 
 
 def run_payment_stock(client, state):
-    """Goal 2: prepaid orders that shipped (stock moved) while still unpaid."""
-    orders = _rows(client, config.ORDER)
-    dis = [
-        {"number": o.get("number"), "payment_method": o.get("payment_method"),
-         "status": o.get("status"), "tracking_number": o.get("tracking_number")}
-        for o in orders
-        if is_shipped(o) and not is_paid(o) and o.get("payment_method") in PREPAID
-    ]
-    state["disagreements"] = dis
-    return state
+    """Goal 2 now runs as a sub-agent. Compatibility entry point (harness/legacy)."""
+    from agent.subgraphs import payment_stock_subgraph   # local import avoids an import cycle
+    state.update(payment_stock_subgraph.run(client, {}))
 
 
 def db_has_cost_data(client):

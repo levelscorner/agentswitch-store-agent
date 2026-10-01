@@ -9,12 +9,18 @@ and the planner prompt are storefront-specific.
 import sys
 from types import SimpleNamespace
 
-from agent import llm, memory, reliability, verify
+from agent import config, llm, memory, reliability, verify
 from agent.client import Client
-from agent.dag import DAG, Node
-from agent.analyst import run_coupon_ledger, run_payment_stock, run_refusal
+from agent.state import State
+from agent.supervisor import Supervisor
+from agent.subgraphs import coupon_ledger_subgraph, payment_stock_subgraph
+from agent.analyst import run_refusal
 
-GOALS = {"coupon_ledger": run_coupon_ledger, "payment_stock": run_payment_stock, "refuse": run_refusal}
+# The supervisor's roster. coupon_ledger and payment_stock are real sub-agents (subgraphs) —
+# each gets only a scoped slice of state; refuse is a trusted one-shot function. The supervisor
+# decides, per request, which of these to call — a capability runs only if the plan needs it.
+ROSTER = {"coupon_ledger": coupon_ledger_subgraph,
+          "payment_stock": payment_stock_subgraph, "refuse": run_refusal}
 
 PLANNER_SYSTEM = (
     "You route a storefront-agent request to goals. Available goals:\n"
@@ -30,7 +36,7 @@ PLANNER_SYSTEM = (
 def plan(prompt):
     try:
         data = llm.draft_json(PLANNER_SYSTEM, prompt, tier="simple", max_tokens=200)
-        goals = [g for g in data.get("goals", []) if g in GOALS]
+        goals = [g for g in data.get("goals", []) if g in ROSTER]
         if goals:
             return goals
     except Exception:
@@ -48,15 +54,6 @@ def _keyword_plan(prompt):
     if any(w in p for w in ("profit", "margin", "cogs", "cost of goods", "how much did we make")):
         goals.append("refuse")
     return goals or ["coupon_ledger", "payment_stock"]
-
-
-def build_dag(goals):
-    dag = DAG(max_workers=3)
-    for g in goals:
-        fn = GOALS[g]
-        dag.add(Node(g, lambda ctx, s, fn=fn: fn(ctx.client, s)))
-    dag.add(Node("verify", lambda ctx, s: verify.run_verify(ctx.client, s), deps=list(goals)))
-    return dag
 
 
 def compose(state):
@@ -87,9 +84,10 @@ def respond(prompt, client=None):
     llm.set_breaker(reliability.Breaker())
     mem = memory.Memory(client).seed_defaults()
     goals = plan(prompt)
-    state = {"prompt": prompt, "goals": goals}
+    state = State({"prompt": prompt, "goals": goals,
+                   "launch_coupon_code": config.LAUNCH_COUPON_CODE})  # global channel for sub-agents
     ctx = SimpleNamespace(client=client, memory=mem)
-    build_dag(goals).run(ctx, state)
+    Supervisor(ROSTER).run(ctx, state, goals)   # 'daddy' routes goals to sub-agents + verify
     return goals, compose(state), state
 
 
