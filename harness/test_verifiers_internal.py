@@ -7,7 +7,7 @@ Run:
     python3 -m harness.test_verifiers_internal
     # or: pytest harness/test_verifiers_internal.py
 """
-from harness.verifiers import _single_tenant, trace_recorded
+from harness.verifiers import _single_tenant, trace_recorded, _untied_count
 from harness.four_fields import verification_of
 
 
@@ -48,6 +48,14 @@ def test_trace_recorded_false_when_empty():
 
 def test_trace_recorded_false_without_dag_order():
     assert trace_recorded({"timings": {"fetch": 0.1}}) is False
+
+
+def test_untied_count_flags_coupons_whose_used_count_mismatches_real_orders():
+    coupons = [{"code": "A", "used_count": 5},   # phantom: claims 5 but no order uses it
+               {"code": "B", "used_count": 0},   # tied: 0 claimed, 0 orders
+               {"code": "C", "used_count": 2}]   # tied: 2 claimed, 2 orders
+    orders = [{"coupon_code": "C"}, {"coupon_code": "C"}]
+    assert _untied_count(coupons, orders) == 1   # only A is untied
 
 
 if __name__ == "__main__":

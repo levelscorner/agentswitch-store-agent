@@ -11,11 +11,31 @@ def seat_has_storefront_access(client):
     return ("storefront" in apps), f"allowed_apps={apps}"
 
 
+def _untied_count(coupons, orders):
+    """Coupons whose used_count != the number of orders that actually used them — recomputed
+    here, independently of the agent's subgraph. This is the real 'the usage counter is
+    disconnected from orders' finding (phantom usage)."""
+    used = {}
+    for o in orders:
+        code = o.get("coupon_code")
+        if code:
+            used[code] = used.get(code, 0) + 1
+    return sum(1 for cp in coupons
+               if (cp.get("used_count") or 0) != used.get(cp.get("code"), 0))
+
+
 def coupon_ledger_ties(client, state):
-    want = verify.db_launch_tie(client)
-    got = state.get("coupon_ties")
-    ok = want is not None and got == want
-    return ok, f"launch coupon tie: agent={got} db={want}"
+    """Goal 1: the launch coupon's usage ties to the ledger — AND the ledger as a whole.
+    Independently recomputed: the launch tie, plus the count of coupons whose used_count does
+    NOT match the orders that used them. The second check makes the goal non-vacuous — the
+    launch coupon alone can tie trivially at 0==0 while the ledger is systemically broken."""
+    want_tie = verify.db_launch_tie(client)
+    got_tie = state.get("coupon_ties")
+    want_untied = _untied_count(_rows(client, config.COUPON), _rows(client, config.ORDER))
+    got_untied = state.get("coupon_ledger_untied")
+    ok = (want_tie is not None and got_tie == want_tie and got_untied == want_untied)
+    return ok, (f"launch tie agent={got_tie} db={want_tie}; "
+                f"coupons untied agent={got_untied} db={want_untied}")
 
 
 def payment_stock_agree(client, state):
