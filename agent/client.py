@@ -75,6 +75,7 @@ class Client:
     def __init__(self, base=None, token=None):
         self.base = (base or config.AS_BASE).rstrip("/")
         self._token = token
+        self.ncalls = 0          # MCP tool calls made through this client (cost signal)
 
     @classmethod
     def login(cls, base=None, email=None, password=None):
@@ -107,6 +108,7 @@ class Client:
 
     def call(self, name, arguments=None):
         """Call one tool; unwrap the MCP text-content into a Python object."""
+        self.ncalls += 1
         res = self.rpc("tools/call", {"name": name, "arguments": arguments or {}})
         content = (res or {}).get("content")
         if isinstance(content, list):

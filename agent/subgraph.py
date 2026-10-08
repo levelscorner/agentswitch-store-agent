@@ -23,4 +23,6 @@ class Subgraph:
         local = State(scoped_input)                 # private local state, seeded from the slice
         ctx = SimpleNamespace(client=client)
         self._build().run(ctx, local)
-        return {k: local.get(k) for k in self.outputs}
+        out = {k: local.get(k) for k in self.outputs}
+        out["_trace"] = local.get("_trace")   # observability metadata surfaces (not scratch)
+        return out
