@@ -43,3 +43,16 @@ def _single_tenant(rows, id_field="company_id"):
 def tenant_isolated(client):
     """Integrity signal: the seat sees only our own company's orders, not another's."""
     return _single_tenant(_rows(client, config.ORDER))
+
+
+def trace_recorded(trace):
+    """A run is observable iff it recorded per-node timings AND the dag order."""
+    t = trace or {}
+    return bool(t.get("timings")) and bool(t.get("dag_order"))
+
+
+def agent_recorded_a_trace(client, state):
+    """Observability (S18): the agent's run must surface a per-node timing trace."""
+    t = state.get("_trace") or {}
+    nodes = list((t.get("timings") or {}).keys())
+    return trace_recorded(t), f"trace nodes={nodes} order={t.get('dag_order')}"

@@ -33,4 +33,11 @@ TASKS = [
         "verify": lambda c, s: V.agent_refused(c, s),
         "verify_key": "refused",
     },
+    {
+        "id": "observability_trace",
+        "desc": "the agent surfaces a per-node timing trace (S18 observability)",
+        "run": run_payment_stock,
+        "verify": lambda c, s: V.agent_recorded_a_trace(c, s),
+        "verify_key": "_trace",
+    },
 ]

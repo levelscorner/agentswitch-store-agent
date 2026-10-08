@@ -7,7 +7,7 @@ Run:
     python3 -m harness.test_verifiers_internal
     # or: pytest harness/test_verifiers_internal.py
 """
-from harness.verifiers import _single_tenant
+from harness.verifiers import _single_tenant, trace_recorded
 from harness.four_fields import verification_of
 
 
@@ -36,6 +36,18 @@ def test_verification_verified_even_when_answer_is_an_empty_list():
     # a correct "no disagreements" answer is still a produced, verified answer
     assert verification_of(ran=True, state={"disagreements": []},
                            reread_key="disagreements") == "verified"
+
+
+def test_trace_recorded_true_with_timings_and_order():
+    assert trace_recorded({"timings": {"fetch": 0.1}, "dag_order": ["fetch"]}) is True
+
+
+def test_trace_recorded_false_when_empty():
+    assert trace_recorded({}) is False
+
+
+def test_trace_recorded_false_without_dag_order():
+    assert trace_recorded({"timings": {"fetch": 0.1}}) is False
 
 
 if __name__ == "__main__":
