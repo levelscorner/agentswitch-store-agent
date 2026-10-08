@@ -12,7 +12,8 @@ import time
 from pathlib import Path
 
 from agent.client import Client
-from .four_fields import Score, HEADER
+from . import verifiers as V
+from .four_fields import Score, HEADER, verification_of
 from .tasks import TASKS
 
 RUNS = Path(__file__).parent / "runs"
@@ -23,13 +24,15 @@ def run_one(client, task):
     state = {}
     journal = {"task": task["id"], "desc": task["desc"], "started": started, "events": []}
 
-    # ACT — run the agent for this task, if one is wired
+    # ACT — run the agent for this task, if one is wired. Count the MCP calls IT makes.
+    calls_before = client.ncalls
     if task["run"]:
         try:
             task["run"](client, state)
             journal["events"].append("agent ran")
         except Exception as e:
             journal["events"].append(f"agent error: {e}")
+    agent_calls = client.ncalls - calls_before
 
     # VERIFY — read the DB and decide truth
     try:
@@ -37,10 +40,22 @@ def run_one(client, task):
     except Exception as e:
         passed, evidence = False, f"verify error: {e}"
 
-    cost = {"seconds": round(time.time() - started, 1)}
+    # COST — real MCP calls the agent made (not the verifier's) + wall time
+    cost = {"calls": agent_calls, "seconds": round(time.time() - started, 1)}
+
+    # INTEGRITY — real check: did the run keep us inside our own company's data?
+    try:
+        integrity = "clean" if V.tenant_isolated(client) else "breach"
+    except Exception:
+        integrity = "unknown"
+
+    # VERIFICATION — did the AGENT itself produce/confirm its own answer from the DB?
+    verification = verification_of(bool(task["run"]), state, task.get("verify_key"))
 
     # JOURNAL TO DISK — before we score anything
-    journal.update({"passed": passed, "evidence": evidence, "cost": cost, "state_keys": list(state)})
+    journal.update({"passed": passed, "evidence": evidence, "integrity": integrity,
+                    "verification": verification, "cost": cost,
+                    "trace": state.get("_trace"), "state_keys": list(state)})
     RUNS.mkdir(exist_ok=True)
     (RUNS / f"{task['id']}.json").write_text(json.dumps(journal, indent=2))
 
@@ -48,7 +63,8 @@ def run_one(client, task):
     return Score(
         task=task["id"],
         outcome="pass" if passed else "fail",
-        verification=("verified" if task["run"] else "n/a"),
+        integrity=integrity,
+        verification=verification,
         cost=cost,
         evidence=evidence,
     )

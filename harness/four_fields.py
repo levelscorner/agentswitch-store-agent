@@ -27,3 +27,18 @@ class Score:
 
 
 HEADER = f"{'task':<26} {'outcome':<6} {'integ':<7} {'verify':<12} cost"
+
+
+def verification_of(ran, state, reread_key):
+    """Did the AGENT itself re-read the DB to confirm its own answer (not just claim it)?
+
+      ran=False                 -> 'n/a'         read-only task, the agent took no action
+      ran + reread field present -> 'verified'    the agent produced its answer (even if empty)
+      ran + reread field absent  -> 'no_attempt'  the agent ran but surfaced nothing to confirm
+
+    Presence, not truthiness: a correct EMPTY answer (e.g. no payment/stock disagreements)
+    is still a produced, verified answer.
+    """
+    if not ran:
+        return "n/a"
+    return "verified" if (reread_key and reread_key in state) else "no_attempt"
