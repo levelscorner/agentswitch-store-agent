@@ -1,0 +1,4 @@
+# Runtime deps for the store-agent harness. The MCP client (agent/client.py) is
+# stdlib-only; certifi just supplies a CA bundle for TLS verification. The storefront
+# goals are pure DB reconciliation, so no model/OpenAI dependency is needed.
+certifi>=2024.0
