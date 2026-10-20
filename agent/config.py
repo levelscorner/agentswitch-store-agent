@@ -6,7 +6,11 @@ differ — that is the one wiring step before the two goals can run for real.
 """
 import os
 
-AS_BASE = os.environ.get("AS_BASE", "https://agentswitch.theschoolofai.in").rstrip("/")
+# Prefer the base the official runner supplies (an internal sandbox host); fall back to
+# AS_BASE for local dev, then the public URL. Keeps any stray login() on the right host.
+AS_BASE = (os.environ.get("AGENTSWITCH_BASE_URL")
+           or os.environ.get("AS_BASE")
+           or "https://agentswitch.theschoolofai.in").rstrip("/")
 AS_EMAIL = os.environ.get("AS_EMAIL", "team08@theschoolofai.in")
 
 # Storefront entities — CONFIRMED live 2026-09-25 (tools/list).
